@@ -69,7 +69,8 @@ for dist in [1,2,3,4,5]:
 # ============================================================================
 #  Reproducibility
 # ============================================================================
-RANDOM_SEED = 100
+from main import RANDOM_SEED
+
 torch.manual_seed(RANDOM_SEED)
 torch.cuda.manual_seed(RANDOM_SEED)
 np.random.seed(RANDOM_SEED)

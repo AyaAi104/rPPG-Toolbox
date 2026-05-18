@@ -1,0 +1,63 @@
+BASE: ['']
+# POS (Plane-Orthogonal-to-Skin) unsupervised rPPG on Daily (Aya) dataset
+# Reference: Wang et al., "Algorithmic Principles of Remote PPG", IEEE TBME 2017
+#
+# Run with:
+#   python main.py --config_file ./configs/infer_configs/Daily_UNSUPERVISED_POS.yaml
+#
+# === SPLIT STRATEGY ===
+# Subject split is handled INSIDE AyaLoader.py (not via BEGIN/END).
+# Condition filtering (distance, motion, lux) is also in AyaLoader.py.
+# BEGIN=0.0, END=1.0 here — AyaLoader ignores these values.
+#
+# === DATA TYPE NOTE ===
+# POS operates on RAW RGB pixel means per frame.
+# Do NOT use 'DiffNormalized' or 'Standardized' here — use ['Raw'].
+
+TOOLBOX_MODE: "unsupervised_method"
+
+UNSUPERVISED:
+  METHOD: ['POS']
+  METRICS: ['MAE', 'RMSE', 'MAPE', 'Pearson', 'SNR', 'BA']
+  DATA:
+    FS: 50
+    DATASET: Aya
+    DO_PREPROCESS: False              # set to False after first successful run
+    DATA_FORMAT: NDCHW               # POS expects T x H x W x C
+    DATA_PATH: "E:/rppg_dataset"
+    CACHED_PATH: "E:/cache/Aya_unsupervised"
+    EXP_DATA_NAME: ""
+    BEGIN: 0.0
+    END: 1.0
+    PREPROCESS:
+      DATA_TYPE: ['Raw']             # MUST be 'Raw' for POS
+      DATA_AUG: ['None']
+      LABEL_TYPE: Raw                # raw ground-truth PPG for evaluation
+      DO_CHUNK: True
+      CHUNK_LENGTH: 500              # ~10 s window at 50 Hz, typical for POS
+      CROP_FACE:
+        DO_CROP_FACE: True
+        BACKEND: 'INSIGHT'
+        USE_LARGE_FACE_BOX: True
+        LARGE_BOX_COEF: 1.5
+        DETECTION:
+          DO_DYNAMIC_DETECTION: False
+          DYNAMIC_DETECTION_FREQUENCY: 30
+          USE_MEDIAN_FACE_BOX: False
+      RESIZE:
+        H: 72
+        W: 72
+
+DEVICE: cuda:0
+NUM_OF_GPU_TRAIN: 1
+
+LOG:
+  PATH: runs/unsupervised_POS
+
+INFERENCE:
+  BATCH_SIZE: 1                      # unsupervised dataloader is always batch_size=1
+  EVALUATION_METHOD: "FFT"           # "FFT" or "peak detection"
+  EVALUATION_WINDOW:
+    USE_SMALLER_WINDOW: False
+    WINDOW_SIZE: 10                  # in seconds
+  MODEL_PATH: ""

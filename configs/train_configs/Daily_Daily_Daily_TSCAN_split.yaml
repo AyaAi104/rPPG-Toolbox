@@ -21,7 +21,7 @@ TRAIN:
     DO_PREPROCESS: True
     DATA_FORMAT: NDCHW
     DATA_PATH: "E:/rppg_dataset"
-    CACHED_PATH: "D:/PreprocessedData/Aya_v2_train"
+    CACHED_PATH: "E:/PreprocessedData/TSCANCache"
     EXP_DATA_NAME: ""
     BEGIN: 0.0
     END: 1.0
@@ -50,7 +50,7 @@ VALID:
     DO_PREPROCESS: True
     DATA_FORMAT: NDCHW
     DATA_PATH: "E:/rppg_dataset"
-    CACHED_PATH: "D:/PreprocessedData/Aya_v2_valid"
+    CACHED_PATH: "E:/PreprocessedData/TSCANCache"
     EXP_DATA_NAME: ""
     BEGIN: 0.0
     END: 1.0
@@ -81,7 +81,7 @@ TEST:
     DO_PREPROCESS: True
     DATA_FORMAT: NDCHW
     DATA_PATH: "E:/rppg_dataset"
-    CACHED_PATH: "D:/PreprocessedData/Aya_v2_test"
+    CACHED_PATH: "E:/PreprocessedData/TSCANCache"
     EXP_DATA_NAME: ""
     BEGIN: 0.0
     END: 1.0

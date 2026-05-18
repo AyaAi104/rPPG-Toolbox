@@ -1,12 +1,12 @@
 """The dataloader for Aya's custom rPPG dataset.
 
-=== Key Modifications (v2) ===
-1. SUBJECT-LEVEL SPLIT: Uses explicit subject ID lists instead of BEGIN/END ratio.
-   Controlled via YAML: TRAIN_SUBJECTS, TEST_SUBJECTS
-2. CONDITION FILTERING: Filters sessions by distance, motion, lux via config lists.
-   Controlled in this file: TRAIN_CONDITIONS / TEST_CONDITIONS dicts.
+=== Key Modifications (v3 — adds dedicated VALID split) ===
+1. SUBJECT-LEVEL SPLIT: Three DISJOINT subject lists (train / valid / test).
+   No leakage between any of the three splits.
+2. CONDITION FILTERING: Filters sessions by distance, motion, lux.
+   TRAIN_CONDITIONS / VALID_CONDITIONS / TEST_CONDITIONS dicts below.
 3. MOTION-LEVEL METADATA: Each preprocessed chunk stores its motion_level
-   (e.g., "Stationary", "Talking") in a side-car .npy file for granular evaluation.
+   in a side-car .json file for granular evaluation.
 
 Dataset Structure:
     DataRoot/
@@ -32,24 +32,33 @@ from dataset.data_loader.BaseLoader import BaseLoader
 #  CONFIGURATION: Edit these to control which sessions are loaded
 # ============================================================================
 
-# --- Subject Split ---
-TRAIN_SUBJECTS = [ 1, 2, 3, 6, 8, 9]
-TEST_SUBJECTS  = [4, 5, 7]
+# --- Subject Split (three DISJOINT sets) ---
+# 训练 / 验证 / 测试 三个互不重叠的受试者集合
+TRAIN_SUBJECTS = [ 3,4,5, 6,7, 8,9]      # 用于训练
+VALID_SUBJECTS = [2]            # 用于挑 best epoch（从原 train 拆出来）
+TEST_SUBJECTS  = [0,1]         # 最终测试，绝不用于训练或挑选模型
 
 # --- Train Conditions: which (distance, motion, lux) combos to include for training ---
 # Set a list to filter, or None / empty list to include ALL values for that dimension.
 TRAIN_CONDITIONS = {
-    "distances": [1, 2, 3,4,5],               # e.g., [1, 2] for 1m and 2m
-    "motions":   None,         # None = all motions (Stationary, Talking, etc.)
-    "lux":       [0,30,70,130],                  # None = all lux levels
+    "distances": [1, 2, 3, 4, 5],
+    "motions":   None,             # None = all motions (Stationary, Talking, ...)
+    "lux":       [0, 30, 70, 130], # None = all lux levels
 }
 
-# --- Test Conditions: which combos to include for testing ---
-# Typically broader to evaluate across all conditions
+# --- Valid Conditions: should MATCH the training distribution ---
+
+VALID_CONDITIONS = {
+    "distances": [1, 2, 3, 4, 5],
+    "motions":   None,
+    "lux":       [0, 30, 70, 130],
+}
+
+# --- Test Conditions: usually a narrow scenario you really care about ---
 TEST_CONDITIONS = {
-    "distances": [3],
-    "motions":   ['Stationary'],                  # None = all motions
-    "lux":       [70],
+    "distances": [1, 2, 3, 4, 5],
+    "motions":   None,
+    "lux":       [0, 30, 70, 130]
 }
 
 
@@ -70,17 +79,17 @@ def _parse_folder_name(folder_name):
     parts = core.split("_")
     result = {}
     try:
-        result["distance"] = int(parts[0].replace("m", ""))   # "1m" -> 1
-        result["lux"] = int(parts[1].replace("lux", ""))       # "30lux" -> 30
-        result["motion"] = parts[2]                             # "Stationary"
-        result["angle"] = parts[3] if len(parts) > 3 else ""   # "45deg"
-        result["device"] = parts[4] if len(parts) > 4 else ""  # "useiPhone"
+        result["distance"] = int(parts[0].replace("m", ""))    # "1m" -> 1
+        result["lux"]      = int(parts[1].replace("lux", ""))  # "30lux" -> 30
+        result["motion"]   = parts[2]                          # "Stationary"
+        result["angle"]    = parts[3] if len(parts) > 3 else ""
+        result["device"]   = parts[4] if len(parts) > 4 else ""
     except (IndexError, ValueError):
         result["distance"] = -1
-        result["lux"] = -1
-        result["motion"] = "Unknown"
-        result["angle"] = ""
-        result["device"] = ""
+        result["lux"]      = -1
+        result["motion"]   = "Unknown"
+        result["angle"]    = ""
+        result["device"]   = ""
     return result
 
 
@@ -106,7 +115,8 @@ def _matches_conditions(parsed, conditions):
 
 
 class AyaLoader(BaseLoader):
-    """The data loader for Aya's custom rPPG dataset (v2 with subject split + condition filtering)."""
+    """The data loader for Aya's custom rPPG dataset
+    (v3: train/valid/test as three disjoint subject splits + condition filtering)."""
 
     def __init__(self, name, data_path, config_data, device=None):
         """Initializes the Aya dataloader.
@@ -130,11 +140,14 @@ class AyaLoader(BaseLoader):
 
         Filters by SUBJECT list and CONDITION list based on self.split_name.
         """
-        # Select subjects and conditions based on split
-        if self.split_name in ("train",):
+        # ---- Select subjects and conditions based on split (three-way) ----
+        if self.split_name == "train":
             allowed_subjects = TRAIN_SUBJECTS
             conditions = TRAIN_CONDITIONS
-        else:  # "valid" or "test"
+        elif self.split_name == "valid":
+            allowed_subjects = VALID_SUBJECTS
+            conditions = VALID_CONDITIONS
+        else:  # "test"
             allowed_subjects = TEST_SUBJECTS
             conditions = TEST_CONDITIONS
 
@@ -175,7 +188,7 @@ class AyaLoader(BaseLoader):
                         "path": vid_folder,
                         "subject": subject,
                         "gt_path": gt_folder,
-                        "motion_level": parsed["motion"],   # <-- NEW: store motion
+                        "motion_level": parsed["motion"],
                         "distance": parsed["distance"],
                         "lux": parsed["lux"],
                     })
@@ -305,7 +318,6 @@ class AyaLoader(BaseLoader):
                 self.chunk_motion_map.update(json.load(f))
 
         if self.chunk_motion_map:
-            # Count per motion level
             motion_counts = {}
             for ml in self.chunk_motion_map.values():
                 motion_counts[ml] = motion_counts.get(ml, 0) + 1
